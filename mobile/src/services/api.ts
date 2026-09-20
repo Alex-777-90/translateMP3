@@ -23,7 +23,7 @@ import {
 */
 
 export const API_BASE_URL =
-  "http://192.168.15.72:8000";
+  "https://translate-mp-3.vercel.app";
 
 
 // ============================================================
