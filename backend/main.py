@@ -1,16 +1,36 @@
-from pathlib import Path
-from uuid import uuid4
+from io import BytesIO
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from fastapi import (
+    FastAPI,
+    HTTPException,
+)
 
-from deep_translator import MyMemoryTranslator
+from fastapi.middleware.cors import (
+    CORSMiddleware,
+)
+
+from fastapi.responses import (
+    StreamingResponse,
+)
+
+from pydantic import (
+    BaseModel,
+    Field,
+)
+
+from deep_translator import (
+    MyMemoryTranslator,
+)
 
 from gtts import gTTS
-from gtts.lang import tts_langs
-from gtts.tts import gTTSError
+
+from gtts.lang import (
+    tts_langs,
+)
+
+from gtts.tts import (
+    gTTSError,
+)
 
 from langdetect import (
     detect_langs,
@@ -24,27 +44,24 @@ from langdetect import (
 
 DetectorFactory.seed = 0
 
-BASE_DIR = Path(__file__).resolve().parent
-
-AUDIO_DIR = BASE_DIR / "audio"
-
-AUDIO_DIR.mkdir(
-    parents=True,
-    exist_ok=True,
-)
-
 
 # ============================================================
 # FASTAPI
 # ============================================================
 
 app = FastAPI(
-    title="Tradutor e Gerador de Áudio API",
+
+    title=
+        "Tradutor e Gerador de Áudio API",
+
     description=(
         "API para tradução, detecção automática "
         "de idioma e geração de áudio MP3."
     ),
-    version="1.2.0",
+
+    version=
+        "1.3.0",
+
 )
 
 
@@ -53,32 +70,34 @@ app = FastAPI(
 # ============================================================
 
 app.add_middleware(
+
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+
+    allow_origins=[
+        "*"
+    ],
+
+    allow_credentials=
+        False,
+
+    allow_methods=[
+        "*"
+    ],
+
+    allow_headers=[
+        "*"
+    ],
+
 )
 
 
 # ============================================================
-# PASTA DE ÁUDIO
+# IDIOMAS SUPORTADOS PELO GTTS
 # ============================================================
 
-app.mount(
-    "/audio",
-    StaticFiles(
-        directory=str(AUDIO_DIR)
-    ),
-    name="audio",
+TTS_LANGUAGES = (
+    tts_langs()
 )
-
-
-# ============================================================
-# IDIOMAS GTTS
-# ============================================================
-
-TTS_LANGUAGES = tts_langs()
 
 
 # ============================================================
@@ -87,145 +106,206 @@ TTS_LANGUAGES = tts_langs()
 
 MYMEMORY_LANGUAGE_MAP = {
 
-    "en": "en-GB",
+    "en":
+        "en-GB",
 
-    "pt": "pt-BR",
+    "pt":
+        "pt-BR",
 
-    "es": "es-ES",
+    "es":
+        "es-ES",
 
-    "fr": "fr-FR",
+    "fr":
+        "fr-FR",
 
-    "de": "de-DE",
+    "de":
+        "de-DE",
 
-    "it": "it-IT",
+    "it":
+        "it-IT",
 
-    "ja": "ja-JP",
+    "ja":
+        "ja-JP",
 
-    "ko": "ko-KR",
+    "ko":
+        "ko-KR",
 
-    "ru": "ru-RU",
+    "ru":
+        "ru-RU",
 
-    "zh-CN": "zh-CN",
+    "zh-CN":
+        "zh-CN",
 
-    "zh-TW": "zh-TW",
+    "zh-TW":
+        "zh-TW",
 
-    "ar": "ar-SA",
+    "ar":
+        "ar-SA",
 
-    "hi": "hi-IN",
+    "hi":
+        "hi-IN",
 
-    "nl": "nl-NL",
+    "nl":
+        "nl-NL",
 
-    "pl": "pl-PL",
+    "pl":
+        "pl-PL",
 
-    "tr": "tr-TR",
+    "tr":
+        "tr-TR",
 
-    "uk": "uk-UA",
+    "uk":
+        "uk-UA",
 
-    "vi": "vi-VN",
+    "vi":
+        "vi-VN",
 
-    "id": "id-ID",
+    "id":
+        "id-ID",
+
 }
 
 
 # ============================================================
-# LANGDETECT -> APP
+# LANGDETECT -> CÓDIGOS DO APP
 # ============================================================
 
 LANGDETECT_TO_APP = {
 
-    "en": "en",
+    "en":
+        "en",
 
-    "pt": "pt",
+    "pt":
+        "pt",
 
-    "es": "es",
+    "es":
+        "es",
 
-    "fr": "fr",
+    "fr":
+        "fr",
 
-    "de": "de",
+    "de":
+        "de",
 
-    "it": "it",
+    "it":
+        "it",
 
-    "ja": "ja",
+    "ja":
+        "ja",
 
-    "ko": "ko",
+    "ko":
+        "ko",
 
-    "ru": "ru",
+    "ru":
+        "ru",
 
-    "zh-cn": "zh-CN",
+    "zh-cn":
+        "zh-CN",
 
-    "zh-tw": "zh-TW",
+    "zh-tw":
+        "zh-TW",
 
-    "ar": "ar",
+    "ar":
+        "ar",
 
-    "hi": "hi",
+    "hi":
+        "hi",
 
-    "nl": "nl",
+    "nl":
+        "nl",
 
-    "pl": "pl",
+    "pl":
+        "pl",
 
-    "tr": "tr",
+    "tr":
+        "tr",
 
-    "uk": "uk",
+    "uk":
+        "uk",
 
-    "vi": "vi",
+    "vi":
+        "vi",
 
-    "id": "id",
+    "id":
+        "id",
+
 }
 
 
 # ============================================================
-# NOMES VISUAIS
+# NOMES DOS IDIOMAS
 # ============================================================
 
 LANGUAGE_DISPLAY_NAMES = {
 
-    "en": "English",
+    "en":
+        "English",
 
-    "pt": "Português",
+    "pt":
+        "Português",
 
-    "es": "Español",
+    "es":
+        "Español",
 
-    "fr": "Français",
+    "fr":
+        "Français",
 
-    "de": "Deutsch",
+    "de":
+        "Deutsch",
 
-    "it": "Italiano",
+    "it":
+        "Italiano",
 
-    "ja": "日本語",
+    "ja":
+        "日本語",
 
-    "ko": "한국어",
+    "ko":
+        "한국어",
 
-    "ru": "Русский",
+    "ru":
+        "Русский",
 
-    "zh-CN": "中文 (简体)",
+    "zh-CN":
+        "中文 (简体)",
 
-    "zh-TW": "中文 (繁體)",
+    "zh-TW":
+        "中文 (繁體)",
 
-    "ar": "العربية",
+    "ar":
+        "العربية",
 
-    "hi": "हिन्दी",
+    "hi":
+        "हिन्दी",
 
-    "nl": "Nederlands",
+    "nl":
+        "Nederlands",
 
-    "pl": "Polski",
+    "pl":
+        "Polski",
 
-    "tr": "Türkçe",
+    "tr":
+        "Türkçe",
 
-    "uk": "Українська",
+    "uk":
+        "Українська",
 
-    "vi": "Tiếng Việt",
+    "vi":
+        "Tiếng Việt",
 
-    "id": "Bahasa Indonesia",
+    "id":
+        "Bahasa Indonesia",
+
 }
 
 
 # ============================================================
-# MAPA GTTS
+# MAPA AUXILIAR DO GTTS
 # ============================================================
 
 TTS_CODE_MAP = {
 
-    code.lower(): code
+    code.lower():
+        code
 
     for code
     in TTS_LANGUAGES.keys()
@@ -237,89 +317,148 @@ TTS_CODE_MAP = {
 # MODELOS
 # ============================================================
 
-
-class DetectLanguageRequest(BaseModel):
+class DetectLanguageRequest(
+    BaseModel
+):
 
     text: str = Field(
+
         ...,
+
         min_length=1,
+
         max_length=5000,
+
         description=(
-            "Texto utilizado para "
-            "detectar o idioma."
+            "Texto utilizado para detectar "
+            "automaticamente o idioma."
         ),
+
     )
 
 
-class TranslateRequest(BaseModel):
+class TranslateRequest(
+    BaseModel
+):
 
     text: str = Field(
+
         ...,
+
         min_length=1,
+
         max_length=5000,
-        description=(
-            "Texto que será traduzido."
-        ),
+
+        description=
+            "Texto que será traduzido.",
+
     )
+
 
     target: str = Field(
+
         ...,
+
         min_length=2,
+
         max_length=20,
+
         description=(
-            "Idioma de destino. "
+            "Código do idioma de destino. "
             "Exemplo: en, es, ja."
         ),
+
     )
 
+
     source: str = Field(
-        default="auto",
+
+        default=
+            "auto",
+
         min_length=2,
+
         max_length=20,
+
         description=(
             "Idioma original ou auto."
         ),
+
     )
 
 
-class AudioRequest(BaseModel):
+class AudioRequest(
+    BaseModel
+):
 
     text: str = Field(
+
         ...,
+
         min_length=1,
+
         max_length=5000,
+
     )
+
 
     lang: str = Field(
+
         ...,
+
         min_length=2,
+
         max_length=20,
+
     )
 
-    slow: bool = False
+
+    slow: bool = (
+        False
+    )
 
 
-class TranslateAudioRequest(BaseModel):
+class TranslateAudioRequest(
+    BaseModel
+):
 
     text: str = Field(
+
         ...,
+
         min_length=1,
+
         max_length=5000,
+
     )
+
 
     target: str = Field(
+
         ...,
+
         min_length=2,
+
         max_length=20,
+
     )
+
 
     source: str = Field(
-        default="auto",
+
+        default=
+            "auto",
+
         min_length=2,
+
         max_length=20,
+
     )
 
-    slow: bool = False
+
+    slow: bool = (
+        False
+    )
 
 
 # ============================================================
@@ -330,36 +469,53 @@ def clean_text(
     text: str
 ) -> str:
 
-    cleaned = text.strip()
+    cleaned = (
+        text.strip()
+    )
+
 
     if not cleaned:
 
         raise HTTPException(
-            status_code=400,
+
+            status_code=
+                400,
+
             detail=(
                 "O texto não pode estar vazio."
-            )
+            ),
+
         )
+
 
     return cleaned
 
 
 # ============================================================
-# NORMALIZAR IDIOMA
+# NORMALIZAR IDIOMA DE TRADUÇÃO
 # ============================================================
 
 def normalize_translation_language(
     language: str
 ) -> str:
 
-    language = language.strip()
+    language = (
+        language.strip()
+    )
 
-    if language.lower() == "auto":
+
+    if (
+        language.lower()
+        ==
+        "auto"
+    ):
 
         return "auto"
 
 
-    for app_code in MYMEMORY_LANGUAGE_MAP:
+    for app_code in (
+        MYMEMORY_LANGUAGE_MAP
+    ):
 
         if (
             app_code.lower()
@@ -371,23 +527,31 @@ def normalize_translation_language(
 
 
     raise HTTPException(
-        status_code=400,
+
+        status_code=
+            400,
+
         detail=(
             "Idioma de tradução "
             f"não suportado: {language}"
-        )
+        ),
+
     )
 
 
 # ============================================================
-# CONVERTER PARA MYMEMORY
+# CONVERTER PARA CÓDIGO DO MYMEMORY
 # ============================================================
 
 def convert_to_mymemory_code(
     language: str
 ) -> str:
 
-    if language == "auto":
+    if (
+        language
+        ==
+        "auto"
+    ):
 
         return "auto"
 
@@ -409,11 +573,15 @@ def convert_to_mymemory_code(
     if not code:
 
         raise HTTPException(
-            status_code=400,
+
+            status_code=
+                400,
+
             detail=(
                 "Idioma não configurado "
                 f"no MyMemory: {language}"
-            )
+            ),
+
         )
 
 
@@ -421,14 +589,16 @@ def convert_to_mymemory_code(
 
 
 # ============================================================
-# NORMALIZAR GTTS
+# NORMALIZAR IDIOMA DO GTTS
 # ============================================================
 
 def normalize_tts_language(
     language: str
 ) -> str:
 
-    language = language.strip()
+    language = (
+        language.strip()
+    )
 
 
     canonical = (
@@ -444,16 +614,20 @@ def normalize_tts_language(
 
 
     raise HTTPException(
-        status_code=400,
+
+        status_code=
+            400,
+
         detail=(
             "Idioma de áudio "
             f"não suportado: {language}"
-        )
+        ),
+
     )
 
 
 # ============================================================
-# NOME DO IDIOMA
+# NOME VISUAL DO IDIOMA
 # ============================================================
 
 def get_language_display_name(
@@ -462,11 +636,14 @@ def get_language_display_name(
 
     return (
         LANGUAGE_DISPLAY_NAMES.get(
+
             code,
+
             TTS_LANGUAGES.get(
                 code,
                 code
-            )
+            ),
+
         )
     )
 
@@ -479,43 +656,67 @@ def detect_source_language(
     text: str
 ):
 
-    text = clean_text(
-        text
+    text = (
+        clean_text(
+            text
+        )
     )
 
 
+    # --------------------------------------------------------
     # Textos extremamente pequenos
-    # não são confiáveis.
+    # não produzem uma detecção confiável
+    # --------------------------------------------------------
 
-    if len(text) < 4:
+    if (
+        len(text)
+        <
+        4
+    ):
 
-        return None, None
+        return (
+            None,
+            None
+        )
 
 
     try:
 
-        results = detect_langs(
-            text
+        results = (
+            detect_langs(
+                text
+            )
         )
 
 
         if not results:
 
-            return None, None
+            return (
+                None,
+                None
+            )
 
 
-        best = results[0]
-
-
-        raw_language = (
-            best.lang
-            .strip()
-            .lower()
+        best = (
+            results[0]
         )
 
 
-        confidence = float(
-            best.prob
+        raw_language = (
+
+            best.lang
+
+            .strip()
+
+            .lower()
+
+        )
+
+
+        confidence = (
+            float(
+                best.prob
+            )
         )
 
 
@@ -532,6 +733,7 @@ def detect_source_language(
                 "[IDIOMA NÃO MAPEADO] "
                 f"{raw_language}"
             )
+
 
             return (
                 None,
@@ -552,10 +754,17 @@ def detect_source_language(
 
 
         print(
+
             "[IDIOMA DETECTADO] "
-            f"{raw_language} -> "
+
+            f"{raw_language}"
+
+            " -> "
+
             f"{app_language} "
+
             f"({confidence:.2%})"
+
         )
 
 
@@ -568,9 +777,13 @@ def detect_source_language(
     except Exception as error:
 
         print(
+
             "[ERRO DETECÇÃO] "
+
             f"{type(error).__name__}: "
+
             f"{error}"
+
         )
 
 
@@ -589,10 +802,20 @@ def resolve_source_language(
     source: str
 ):
 
-    source = source.strip()
+    source = (
+        source.strip()
+    )
 
 
-    if source.lower() != "auto":
+    # --------------------------------------------------------
+    # Origem escolhida manualmente
+    # --------------------------------------------------------
+
+    if (
+        source.lower()
+        !=
+        "auto"
+    ):
 
         normalized = (
             normalize_translation_language(
@@ -600,41 +823,61 @@ def resolve_source_language(
             )
         )
 
+
         return (
+
             normalized,
+
             None,
-            None
+
+            None,
+
         )
 
 
-    detected_source, confidence = (
-        detect_source_language(
-            text
-        )
+    # --------------------------------------------------------
+    # Detecção automática
+    # --------------------------------------------------------
+
+    (
+        detected_source,
+        confidence,
+
+    ) = detect_source_language(
+        text
     )
 
 
     if detected_source:
 
         return (
+
             detected_source,
+
             detected_source,
-            confidence
+
+            confidence,
+
         )
 
 
-    # Caso o langdetect não consiga,
-    # deixa o MyMemory tentar automaticamente.
+    # --------------------------------------------------------
+    # Fallback
+    # --------------------------------------------------------
 
     return (
+
         "auto",
+
         None,
-        confidence
+
+        confidence,
+
     )
 
 
 # ============================================================
-# TRADUZIR
+# TRADUZIR TEXTO
 # ============================================================
 
 def translate_text(
@@ -643,8 +886,10 @@ def translate_text(
     target: str
 ) -> str:
 
-    text = clean_text(
-        text
+    text = (
+        clean_text(
+            text
+        )
     )
 
 
@@ -663,7 +908,7 @@ def translate_text(
 
 
     # --------------------------------------------------------
-    # ORIGEM = DESTINO
+    # MESMO IDIOMA
     # --------------------------------------------------------
 
     if (
@@ -676,7 +921,7 @@ def translate_text(
 
 
     # --------------------------------------------------------
-    # MYMEMORY
+    # CONVERTER PARA MYMEMORY
     # --------------------------------------------------------
 
     mymemory_source = (
@@ -694,10 +939,21 @@ def translate_text(
 
 
     print(
+
         "[TRADUÇÃO] "
+
         f"{source} -> {target} "
-        f"({mymemory_source} -> "
-        f"{mymemory_target})"
+
+        "("
+
+        f"{mymemory_source}"
+
+        " -> "
+
+        f"{mymemory_target}"
+
+        ")"
+
     )
 
 
@@ -705,8 +961,13 @@ def translate_text(
 
         translator = (
             MyMemoryTranslator(
-                source=mymemory_source,
-                target=mymemory_target,
+
+                source=
+                    mymemory_source,
+
+                target=
+                    mymemory_target,
+
             )
         )
 
@@ -721,10 +982,14 @@ def translate_text(
         if not translated:
 
             raise HTTPException(
-                status_code=500,
+
+                status_code=
+                    500,
+
                 detail=(
                     "A tradução retornou vazia."
-                )
+                ),
+
             )
 
 
@@ -739,35 +1004,44 @@ def translate_text(
     except Exception as error:
 
         print(
+
             "[ERRO TRADUÇÃO] "
+
             f"{type(error).__name__}: "
+
             f"{error}"
+
         )
 
 
         raise HTTPException(
-            status_code=502,
+
+            status_code=
+                502,
+
             detail=(
                 "Não foi possível realizar "
                 "a tradução neste momento. "
-                f"Erro: "
-                f"{type(error).__name__}"
-            )
+                f"Erro: {type(error).__name__}"
+            ),
+
         )
 
 
 # ============================================================
-# CRIAR ÁUDIO
+# CRIAR ÁUDIO EM MEMÓRIA
 # ============================================================
 
-def create_audio(
+def create_audio_buffer(
     text: str,
     lang: str,
     slow: bool = False
-) -> str:
+) -> BytesIO:
 
-    text = clean_text(
-        text
+    text = (
+        clean_text(
+            text
+        )
     )
 
 
@@ -778,108 +1052,153 @@ def create_audio(
     )
 
 
-    filename = (
-        f"{uuid4().hex}.mp3"
-    )
-
-
-    filepath = (
-        AUDIO_DIR
-        /
-        filename
-    )
-
-
     try:
 
-        tts = gTTS(
-            text=text,
-            lang=lang,
-            slow=slow,
+        # ----------------------------------------------------
+        # O MP3 só existe em memória.
+        #
+        # Nenhum arquivo é criado
+        # no servidor/Vercel.
+        # ----------------------------------------------------
+
+        audio_buffer = (
+            BytesIO()
         )
 
 
-        tts.save(
-            str(filepath)
+        tts = (
+            gTTS(
+
+                text=
+                    text,
+
+                lang=
+                    lang,
+
+                slow=
+                    slow,
+
+            )
+        )
+
+
+        tts.write_to_fp(
+            audio_buffer
+        )
+
+
+        # ----------------------------------------------------
+        # Voltar para o começo do arquivo
+        # antes de enviar.
+        # ----------------------------------------------------
+
+        audio_buffer.seek(
+            0
         )
 
 
         print(
-            "[ÁUDIO GERADO] "
-            f"{filename}"
+
+            "[ÁUDIO GERADO EM MEMÓRIA] "
+
+            f"Idioma: {lang} | "
+
+            f"Lento: {slow}"
+
         )
 
 
-        return filename
+        return audio_buffer
 
 
     except gTTSError as error:
 
         print(
+
             "[ERRO GTTS] "
+
             f"{type(error).__name__}: "
+
             f"{error}"
+
         )
-
-
-        if filepath.exists():
-
-            filepath.unlink()
 
 
         raise HTTPException(
-            status_code=502,
+
+            status_code=
+                502,
+
             detail=(
-                "Não foi possível "
-                "gerar o áudio."
-            )
+                "Não foi possível gerar "
+                "o áudio."
+            ),
+
         )
+
+
+    except HTTPException:
+
+        raise
 
 
     except Exception as error:
 
         print(
+
             "[ERRO ÁUDIO] "
+
             f"{type(error).__name__}: "
+
             f"{error}"
+
         )
-
-
-        if filepath.exists():
-
-            filepath.unlink()
 
 
         raise HTTPException(
-            status_code=500,
+
+            status_code=
+                500,
+
             detail=(
                 "Erro interno ao gerar "
                 "o áudio."
-            )
+            ),
+
         )
 
 
 # ============================================================
-# URL DO ÁUDIO
+# RESPOSTA MP3
 # ============================================================
 
-def build_audio_url(
-    request: Request,
-    filename: str
-) -> str:
+def create_audio_response(
+    audio_buffer: BytesIO,
+    filename: str = "traducao.mp3"
+):
 
-    base_url = (
-        str(
-            request.base_url
-        )
-        .rstrip("/")
-    )
+    return StreamingResponse(
 
+        audio_buffer,
 
-    return (
-        f"{base_url}"
-        f"/audio/"
-        f"{filename}"
+        media_type=
+            "audio/mpeg",
+
+        headers={
+
+            "Content-Disposition":
+                (
+                    f'inline; filename="{filename}"'
+                ),
+
+            "Cache-Control":
+                "no-store",
+
+            "X-Content-Type-Options":
+                "nosniff",
+
+        },
+
     )
 
 
@@ -896,7 +1215,7 @@ def root():
             "Tradutor e Gerador de Áudio",
 
         "version":
-            "1.2.0",
+            "1.3.0",
 
         "status":
             "online",
@@ -910,6 +1229,9 @@ def root():
         "tts":
             "gTTS",
 
+        "audio_storage":
+            "memory",
+
         "docs":
             "/docs",
 
@@ -917,7 +1239,7 @@ def root():
 
 
 # ============================================================
-# HEALTH
+# HEALTH CHECK
 # ============================================================
 
 @app.get("/health")
@@ -944,7 +1266,9 @@ def get_languages():
     languages = []
 
 
-    for code in MYMEMORY_LANGUAGE_MAP:
+    for code in (
+        MYMEMORY_LANGUAGE_MAP
+    ):
 
         tts_code = (
             TTS_CODE_MAP.get(
@@ -953,8 +1277,10 @@ def get_languages():
         )
 
 
-        # Só mostra se houver voz
-        # correspondente no gTTS.
+        # ----------------------------------------------------
+        # Só mostra idiomas que também
+        # possuem voz no gTTS
+        # ----------------------------------------------------
 
         if not tts_code:
 
@@ -983,8 +1309,10 @@ def get_languages():
 
 
     languages.sort(
+
         key=lambda item:
             item["name"].lower()
+
     )
 
 
@@ -1003,7 +1331,9 @@ def get_languages():
 # DETECTAR IDIOMA
 # ============================================================
 
-@app.post("/detect-language")
+@app.post(
+    "/detect-language"
+)
 def detect_language(
     data: DetectLanguageRequest
 ):
@@ -1013,9 +1343,11 @@ def detect_language(
     )
 
 
-    # Evita detecção muito cedo.
-
-    if len(text) < 4:
+    if (
+        len(text)
+        <
+        4
+    ):
 
         return {
 
@@ -1023,6 +1355,9 @@ def detect_language(
                 True,
 
             "detected_source":
+                None,
+
+            "detected_name":
                 None,
 
             "detection_confidence":
@@ -1033,13 +1368,16 @@ def detect_language(
 
     (
         detected_source,
-        detection_confidence
+        detection_confidence,
+
     ) = detect_source_language(
         text
     )
 
 
-    detected_name = None
+    detected_name = (
+        None
+    )
 
 
     if detected_source:
@@ -1072,7 +1410,9 @@ def detect_language(
 # TRADUZIR
 # ============================================================
 
-@app.post("/translate")
+@app.post(
+    "/translate"
+)
 def translate(
     data: TranslateRequest
 ):
@@ -1080,18 +1420,31 @@ def translate(
     (
         effective_source,
         detected_source,
-        detection_confidence
+        detection_confidence,
+
     ) = resolve_source_language(
-        text=data.text,
-        source=data.source,
+
+        text=
+            data.text,
+
+        source=
+            data.source,
+
     )
 
 
     translated_text = (
         translate_text(
-            text=data.text,
-            source=effective_source,
-            target=data.target,
+
+            text=
+                data.text,
+
+            source=
+                effective_source,
+
+            target=
+                data.target,
+
         )
     )
 
@@ -1129,10 +1482,11 @@ def translate(
 # GERAR ÁUDIO
 # ============================================================
 
-@app.post("/audio")
+@app.post(
+    "/audio"
+)
 def generate_audio(
-    data: AudioRequest,
-    request: Request
+    data: AudioRequest
 ):
 
     lang = (
@@ -1142,67 +1496,75 @@ def generate_audio(
     )
 
 
-    filename = (
-        create_audio(
-            text=data.text,
-            lang=lang,
-            slow=data.slow,
+    audio_buffer = (
+        create_audio_buffer(
+
+            text=
+                data.text,
+
+            lang=
+                lang,
+
+            slow=
+                data.slow,
+
         )
     )
 
 
-    audio_url = (
-        build_audio_url(
-            request,
-            filename
+    # --------------------------------------------------------
+    # IMPORTANTE:
+    #
+    # Agora esta rota NÃO retorna JSON.
+    #
+    # Ela devolve diretamente:
+    #
+    # Content-Type: audio/mpeg
+    #
+    # e o corpo da resposta são
+    # os bytes do MP3.
+    # --------------------------------------------------------
+
+    return (
+        create_audio_response(
+
+            audio_buffer,
+
+            filename=
+                "traducao.mp3",
+
         )
     )
-
-
-    return {
-
-        "success":
-            True,
-
-        "text":
-            data.text.strip(),
-
-        "language":
-            lang,
-
-        "slow":
-            data.slow,
-
-        "filename":
-            filename,
-
-        "audio_url":
-            audio_url,
-
-    }
 
 
 # ============================================================
 # TRADUZIR + GERAR ÁUDIO
 # ============================================================
 
-@app.post("/translate-audio")
+@app.post(
+    "/translate-audio"
+)
 def translate_and_generate_audio(
-    data: TranslateAudioRequest,
-    request: Request
+    data: TranslateAudioRequest
 ):
 
     # --------------------------------------------------------
-    # DESCOBRIR ORIGEM
+    # DETECTAR / RESOLVER ORIGEM
     # --------------------------------------------------------
 
     (
         effective_source,
         detected_source,
-        detection_confidence
+        detection_confidence,
+
     ) = resolve_source_language(
-        text=data.text,
-        source=data.source,
+
+        text=
+            data.text,
+
+        source=
+            data.source,
+
     )
 
 
@@ -1223,15 +1585,22 @@ def translate_and_generate_audio(
 
     translated_text = (
         translate_text(
-            text=data.text,
-            source=effective_source,
-            target=target,
+
+            text=
+                data.text,
+
+            source=
+                effective_source,
+
+            target=
+                target,
+
         )
     )
 
 
     # --------------------------------------------------------
-    # VOZ
+    # IDIOMA DA VOZ
     # --------------------------------------------------------
 
     tts_lang = (
@@ -1241,70 +1610,60 @@ def translate_and_generate_audio(
     )
 
 
-    filename = (
-        create_audio(
-            text=translated_text,
-            lang=tts_lang,
-            slow=data.slow,
-        )
-    )
+    # --------------------------------------------------------
+    # MP3 EM MEMÓRIA
+    # --------------------------------------------------------
 
+    audio_buffer = (
+        create_audio_buffer(
 
-    audio_url = (
-        build_audio_url(
-            request,
-            filename
-        )
-    )
+            text=
+                translated_text,
 
-
-    return {
-
-        "success":
-            True,
-
-        "original":
-            data.text.strip(),
-
-        "translated":
-            translated_text,
-
-        "source":
-            data.source,
-
-        "effective_source":
-            effective_source,
-
-        "detected_source":
-            detected_source,
-
-        "detection_confidence":
-            detection_confidence,
-
-        "target":
-            target,
-
-        "audio": {
-
-            "filename":
-                filename,
-
-            "url":
-                audio_url,
-
-            "language":
+            lang=
                 tts_lang,
 
-            "slow":
+            slow=
                 data.slow,
 
-        },
+        )
+    )
 
-    }
+
+    print(
+
+        "[TRADUZIR + ÁUDIO] "
+
+        f"{effective_source}"
+
+        " -> "
+
+        f"{target}"
+
+    )
+
+
+    # --------------------------------------------------------
+    # Retorna diretamente o MP3.
+    #
+    # Esta rota também não retorna
+    # mais JSON.
+    # --------------------------------------------------------
+
+    return (
+        create_audio_response(
+
+            audio_buffer,
+
+            filename=
+                "traducao.mp3",
+
+        )
+    )
 
 
 # ============================================================
-# EXECUÇÃO
+# EXECUÇÃO LOCAL
 # ============================================================
 
 if __name__ == "__main__":
@@ -1313,8 +1672,16 @@ if __name__ == "__main__":
 
 
     uvicorn.run(
+
         "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
+
+        host=
+            "0.0.0.0",
+
+        port=
+            8000,
+
+        reload=
+            True,
+
     )

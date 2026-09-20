@@ -1,26 +1,26 @@
+import {
+  fetch as expoFetch,
+} from "expo/fetch";
+
+import {
+  File,
+  Paths,
+} from "expo-file-system";
+
+
 // ============================================================
 // CONFIGURAÇÃO DA API
 // ============================================================
 
 /*
-  IMPORTANTE:
+  POR ENQUANTO:
 
-  Se estiver usando um CELULAR FÍSICO com Expo Go,
-  NÃO use:
+  Mantemos o IP local para continuar testando.
 
-  http://127.0.0.1:8000
-  http://localhost:8000
+  Depois do deploy na Vercel, troque por algo como:
 
-  Porque "localhost" no celular significa
-  o próprio celular.
-
-  Use o endereço IPv4 do computador.
-
-  Para descobrir:
-
-  ipconfig
+  https://seu-projeto.vercel.app
 */
-
 
 export const API_BASE_URL =
   "http://192.168.15.72:8000";
@@ -32,6 +32,9 @@ export const API_BASE_URL =
 
 const DEFAULT_TIMEOUT =
   30000;
+
+const AUDIO_TIMEOUT =
+  60000;
 
 
 // ============================================================
@@ -110,18 +113,9 @@ export interface TranslateResponse {
 
   source: string;
 
-  /*
-    O backend pode retornar qual
-    idioma efetivamente foi usado.
-  */
   effective_source?:
     string;
 
-  /*
-    Quando source = auto,
-    estes campos informam
-    o idioma encontrado.
-  */
   detected_source:
     string | null;
 
@@ -134,7 +128,7 @@ export interface TranslateResponse {
 
 
 // ============================================================
-// TIPOS - ÁUDIO
+// TIPOS - GERAR ÁUDIO
 // ============================================================
 
 export interface GenerateAudioRequest {
@@ -148,25 +142,35 @@ export interface GenerateAudioRequest {
 }
 
 
+/*
+  IMPORTANTE:
+
+  O backend não retorna mais:
+
+  audio_url
+
+  Agora recebemos os bytes do MP3,
+  salvamos no cache do celular
+  e retornamos:
+
+  audio_uri
+*/
+
 export interface GenerateAudioResponse {
 
   success: boolean;
 
-  text: string;
-
-  language: string;
-
-  slow: boolean;
-
   filename: string;
 
-  audio_url: string;
+  audio_uri: string;
+
+  mime_type: string;
 
 }
 
 
 // ============================================================
-// TIPOS - TRADUZIR + ÁUDIO
+// TIPOS - TRADUZIR + GERAR ÁUDIO
 // ============================================================
 
 export interface TranslateAudioRequest {
@@ -186,40 +190,17 @@ export interface TranslateAudioResponse {
 
   success: boolean;
 
-  original: string;
+  filename: string;
 
-  translated: string;
+  audio_uri: string;
 
-  source: string;
-
-  effective_source?:
-    string;
-
-  detected_source?:
-    string | null;
-
-  detection_confidence?:
-    number | null;
-
-  target: string;
-
-  audio: {
-
-    filename: string;
-
-    url: string;
-
-    language: string;
-
-    slow: boolean;
-
-  };
+  mime_type: string;
 
 }
 
 
 // ============================================================
-// TIPOS - HEALTH
+// HEALTH
 // ============================================================
 
 export interface HealthResponse {
@@ -271,7 +252,7 @@ export class ApiError
 
 
 // ============================================================
-// NORMALIZAR URL
+// MONTAR URL
 // ============================================================
 
 function buildUrl(
@@ -308,8 +289,7 @@ function extractErrorMessage(
 ): string {
 
   if (
-    typeof data ===
-      "object"
+    typeof data === "object"
     &&
     data !== null
   ) {
@@ -321,17 +301,15 @@ function extractErrorMessage(
       >;
 
 
-    // --------------------------------------------------------
     // FastAPI:
     //
     // {
-    //   "detail": "Mensagem"
+    //   "detail": "Mensagem..."
     // }
-    // --------------------------------------------------------
 
     if (
       typeof obj.detail ===
-        "string"
+      "string"
     ) {
 
       return obj.detail;
@@ -339,13 +317,9 @@ function extractErrorMessage(
     }
 
 
-    // --------------------------------------------------------
-    // Formato alternativo
-    // --------------------------------------------------------
-
     if (
       typeof obj.message ===
-        "string"
+      "string"
     ) {
 
       return obj.message;
@@ -353,9 +327,17 @@ function extractErrorMessage(
     }
 
 
-    // --------------------------------------------------------
-    // Erro de validação FastAPI
-    // --------------------------------------------------------
+    /*
+      Erro de validação:
+
+      {
+        "detail": [
+          {
+            "msg": "..."
+          }
+        ]
+      }
+    */
 
     if (
       Array.isArray(
@@ -371,7 +353,7 @@ function extractErrorMessage(
 
       if (
         typeof firstError ===
-          "object"
+        "object"
         &&
         firstError !== null
       ) {
@@ -385,7 +367,7 @@ function extractErrorMessage(
 
         if (
           typeof errorObject.msg ===
-            "string"
+          "string"
         ) {
 
           return (
@@ -407,7 +389,7 @@ function extractErrorMessage(
 
 
 // ============================================================
-// REQUEST GENÉRICO
+// REQUEST JSON
 // ============================================================
 
 async function request<T>(
@@ -439,6 +421,7 @@ async function request<T>(
           endpoint
         ),
         {
+
           ...options,
 
           signal:
@@ -489,12 +472,14 @@ async function request<T>(
 
     } else {
 
-      const text =
+      const responseText =
         await response.text();
 
 
       data =
-        text || null;
+        responseText
+        ||
+        null;
 
     }
 
@@ -503,19 +488,28 @@ async function request<T>(
     // ERRO HTTP
     // ========================================================
 
-    if (!response.ok) {
+    if (
+      !response.ok
+    ) {
 
       const message =
         extractErrorMessage(
+
           data,
+
           `Erro ${response.status} ao acessar o servidor.`
+
         );
 
 
       throw new ApiError(
+
         message,
+
         response.status,
+
         data
+
       );
 
     }
@@ -536,7 +530,7 @@ async function request<T>(
       error instanceof Error
       &&
       error.name ===
-        "AbortError"
+      "AbortError"
     ) {
 
       throw new ApiError(
@@ -560,7 +554,7 @@ async function request<T>(
 
 
     // ========================================================
-    // ERRO DE CONEXÃO
+    // CONEXÃO
     // ========================================================
 
     console.error(
@@ -572,7 +566,7 @@ async function request<T>(
     throw new ApiError(
       "Não foi possível conectar ao servidor. "
       +
-      "Verifique se o backend está ligado e se o celular e o computador estão na mesma rede."
+      "Verifique se o backend está online."
     );
 
 
@@ -588,18 +582,372 @@ async function request<T>(
 
 
 // ============================================================
-// TESTAR BACKEND
+// LER ERRO DE RESPOSTA BINÁRIA
+// ============================================================
+
+async function readBinaryError(
+  response: Response
+): Promise<unknown> {
+
+  const contentType =
+    response.headers.get(
+      "content-type"
+    );
+
+
+  try {
+
+    if (
+      contentType?.includes(
+        "application/json"
+      )
+    ) {
+
+      return (
+        await response.json()
+      );
+
+    }
+
+
+    const text =
+      await response.text();
+
+
+    return (
+      text
+      ||
+      null
+    );
+
+
+  } catch {
+
+    return null;
+
+  }
+
+}
+
+
+// ============================================================
+// GERAR NOME DO ARQUIVO
+// ============================================================
+
+function createAudioFileName(
+  prefix:
+    string = "traducao"
+): string {
+
+  const timestamp =
+    Date.now();
+
+
+  const random =
+    Math.random()
+      .toString(36)
+      .slice(
+        2,
+        8
+      );
+
+
+  return (
+    `${prefix}-${timestamp}-${random}.mp3`
+  );
+
+}
+
+
+// ============================================================
+// REQUEST DE MP3
+// ============================================================
+
+async function requestAudioFile(
+  endpoint: string,
+  body: unknown,
+  prefix:
+    string = "traducao"
+): Promise<{
+  filename: string;
+  audio_uri: string;
+  mime_type: string;
+}> {
+
+  const controller =
+    new AbortController();
+
+
+  const timeoutId =
+    setTimeout(
+      () => {
+
+        controller.abort();
+
+      },
+      AUDIO_TIMEOUT
+    );
+
+
+  try {
+
+    // ========================================================
+    // CHAMAR BACKEND
+    // ========================================================
+
+    const response =
+      await expoFetch(
+        buildUrl(
+          endpoint
+        ),
+        {
+
+          method:
+            "POST",
+
+          signal:
+            controller.signal,
+
+          headers: {
+
+            Accept:
+              "audio/mpeg",
+
+            "Content-Type":
+              "application/json",
+
+          },
+
+          body:
+            JSON.stringify(
+              body
+            ),
+
+        }
+      );
+
+
+    // ========================================================
+    // ERRO DO BACKEND
+    // ========================================================
+
+    if (
+      !response.ok
+    ) {
+
+      const errorData =
+        await readBinaryError(
+          response as unknown as Response
+        );
+
+
+      const message =
+        extractErrorMessage(
+
+          errorData,
+
+          `Erro ${response.status} ao gerar o áudio.`
+
+        );
+
+
+      throw new ApiError(
+
+        message,
+
+        response.status,
+
+        errorData
+
+      );
+
+    }
+
+
+    // ========================================================
+    // VERIFICAR CONTENT-TYPE
+    // ========================================================
+
+    const contentType =
+      response.headers.get(
+        "content-type"
+      )
+      ||
+      "audio/mpeg";
+
+
+    /*
+      Se por algum motivo o servidor
+      retornar JSON com status 200,
+      não queremos salvar isso como MP3.
+    */
+
+    if (
+      contentType.includes(
+        "application/json"
+      )
+    ) {
+
+      const unexpectedData =
+        await response.json();
+
+
+      throw new ApiError(
+        extractErrorMessage(
+          unexpectedData,
+          "O servidor não retornou um arquivo de áudio válido."
+        ),
+        response.status,
+        unexpectedData
+      );
+
+    }
+
+
+    // ========================================================
+    // RECEBER BYTES DO MP3
+    // ========================================================
+
+    const bytes =
+      await response.bytes();
+
+
+    if (
+      !bytes
+      ||
+      bytes.byteLength === 0
+    ) {
+
+      throw new ApiError(
+        "O servidor retornou um arquivo de áudio vazio."
+      );
+
+    }
+
+
+    // ========================================================
+    // CRIAR ARQUIVO NO CACHE
+    // ========================================================
+
+    const filename =
+      createAudioFileName(
+        prefix
+      );
+
+
+    const audioFile =
+      new File(
+        Paths.cache,
+        filename
+      );
+
+
+    /*
+      File.write aceita Uint8Array.
+
+      O arquivo fica no cache
+      privado do aplicativo.
+    */
+
+    await audioFile.write(
+      bytes
+    );
+
+
+    console.log(
+      "Áudio salvo no cache:",
+      audioFile.uri
+    );
+
+
+    // ========================================================
+    // RETORNAR URI LOCAL
+    // ========================================================
+
+    return {
+
+      filename,
+
+      audio_uri:
+        audioFile.uri,
+
+      mime_type:
+        contentType,
+
+    };
+
+
+  } catch (error) {
+
+    // ========================================================
+    // TIMEOUT
+    // ========================================================
+
+    if (
+      error instanceof Error
+      &&
+      error.name ===
+      "AbortError"
+    ) {
+
+      throw new ApiError(
+        "A geração do áudio demorou muito para responder."
+      );
+
+    }
+
+
+    // ========================================================
+    // ERRO TRATADO
+    // ========================================================
+
+    if (
+      error instanceof ApiError
+    ) {
+
+      throw error;
+
+    }
+
+
+    console.error(
+      "Erro ao receber MP3:",
+      error
+    );
+
+
+    throw new ApiError(
+      "Não foi possível receber ou salvar o áudio."
+    );
+
+
+  } finally {
+
+    clearTimeout(
+      timeoutId
+    );
+
+  }
+
+}
+
+
+// ============================================================
+// HEALTH
 // ============================================================
 
 export async function checkHealth():
 Promise<HealthResponse> {
 
   return request<HealthResponse>(
+
     "/health",
+
     {
       method:
         "GET",
     }
+
   );
 
 }
@@ -616,11 +964,14 @@ Promise<Language[]> {
     await request<
       LanguagesResponse
     >(
+
       "/languages",
+
       {
         method:
           "GET",
       }
+
     );
 
 
@@ -656,15 +1007,6 @@ export async function detectLanguage(
     text.trim();
 
 
-  /*
-    Textos muito pequenos não são
-    confiáveis para identificação.
-
-    O HomeScreen também faz essa
-    verificação, mas deixamos aqui
-    como proteção adicional.
-  */
-
   if (
     cleanedText.length < 4
   ) {
@@ -691,21 +1033,28 @@ export async function detectLanguage(
   return request<
     DetectLanguageResponse
   >(
+
     "/detect-language",
+
     {
+
       method:
         "POST",
 
       body:
         JSON.stringify(
           {
+
             text:
               cleanedText,
+
           }
         ),
+
     },
 
     15000
+
   );
 
 }
@@ -723,7 +1072,9 @@ export async function translateText(
     data.text.trim();
 
 
-  if (!text) {
+  if (
+    !text
+  ) {
 
     throw new ApiError(
       "Digite um texto para traduzir."
@@ -732,7 +1083,9 @@ export async function translateText(
   }
 
 
-  if (!data.target) {
+  if (
+    !data.target
+  ) {
 
     throw new ApiError(
       "Selecione o idioma de destino."
@@ -744,8 +1097,11 @@ export async function translateText(
   return request<
     TranslateResponse
   >(
+
     "/translate",
+
     {
+
       method:
         "POST",
 
@@ -765,7 +1121,9 @@ export async function translateText(
 
           }
         ),
+
     }
+
   );
 
 }
@@ -783,7 +1141,9 @@ export async function generateAudio(
     data.text.trim();
 
 
-  if (!text) {
+  if (
+    !text
+  ) {
 
     throw new ApiError(
       "Não há texto para gerar o áudio."
@@ -792,7 +1152,9 @@ export async function generateAudio(
   }
 
 
-  if (!data.lang) {
+  if (
+    !data.lang
+  ) {
 
     throw new ApiError(
       "Selecione o idioma do áudio."
@@ -801,38 +1163,45 @@ export async function generateAudio(
   }
 
 
-  return request<
-    GenerateAudioResponse
-  >(
-    "/audio",
-    {
-      method:
-        "POST",
+  const result =
+    await requestAudioFile(
 
-      body:
-        JSON.stringify(
-          {
+      "/audio",
 
-            text,
+      {
 
-            lang:
-              data.lang,
+        text,
 
-            slow:
-              data.slow
-              ??
-              false,
+        lang:
+          data.lang,
 
-          }
-        ),
-    },
+        slow:
+          data.slow
+          ??
+          false,
 
-    /*
-      gTTS pode demorar um
-      pouco mais.
-    */
-    60000
-  );
+      },
+
+      "traducao"
+
+    );
+
+
+  return {
+
+    success:
+      true,
+
+    filename:
+      result.filename,
+
+    audio_uri:
+      result.audio_uri,
+
+    mime_type:
+      result.mime_type,
+
+  };
 
 }
 
@@ -850,7 +1219,9 @@ translateAndGenerateAudio(
     data.text.trim();
 
 
-  if (!text) {
+  if (
+    !text
+  ) {
 
     throw new ApiError(
       "Digite um texto."
@@ -859,7 +1230,9 @@ translateAndGenerateAudio(
   }
 
 
-  if (!data.target) {
+  if (
+    !data.target
+  ) {
 
     throw new ApiError(
       "Selecione o idioma de destino."
@@ -868,38 +1241,49 @@ translateAndGenerateAudio(
   }
 
 
-  return request<
-    TranslateAudioResponse
-  >(
-    "/translate-audio",
-    {
-      method:
-        "POST",
+  const result =
+    await requestAudioFile(
 
-      body:
-        JSON.stringify(
-          {
+      "/translate-audio",
 
-            text,
+      {
 
-            source:
-              data.source
-              ||
-              "auto",
+        text,
 
-            target:
-              data.target,
+        source:
+          data.source
+          ||
+          "auto",
 
-            slow:
-              data.slow
-              ??
-              false,
+        target:
+          data.target,
 
-          }
-        ),
-    },
+        slow:
+          data.slow
+          ??
+          false,
 
-    60000
-  );
+      },
+
+      "traducao"
+
+    );
+
+
+  return {
+
+    success:
+      true,
+
+    filename:
+      result.filename,
+
+    audio_uri:
+      result.audio_uri,
+
+    mime_type:
+      result.mime_type,
+
+  };
 
 }

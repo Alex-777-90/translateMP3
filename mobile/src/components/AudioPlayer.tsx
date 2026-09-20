@@ -31,7 +31,19 @@ import * as Sharing
 // ============================================================
 
 interface AudioPlayerProps {
+
+  /*
+    Mantemos o nome audioUrl para
+    não precisar alterar o componente
+    no HomeScreen.
+
+    Porém agora esse valor será
+    normalmente uma URI local:
+
+    file:///...
+  */
   audioUrl: string;
+
 }
 
 
@@ -44,7 +56,7 @@ export default function AudioPlayer({
 }: AudioPlayerProps) {
 
   // ==========================================================
-  // DOWNLOAD
+  // ESTADOS
   // ==========================================================
 
   const [
@@ -63,23 +75,26 @@ export default function AudioPlayer({
   // PLAYER
   // ==========================================================
 
-  const player = useAudioPlayer(
-    audioUrl,
-    {
-      updateInterval: 250,
+  /*
+    O arquivo MP3 já está no cache
+    local do celular.
 
-      /*
-        Como os MP3 gerados são pequenos,
-        baixamos primeiro para deixar
-        a reprodução mais estável.
-      */
-      downloadFirst: true,
-    }
-  );
+    Portanto não precisamos utilizar
+    downloadFirst.
+  */
+
+  const player =
+    useAudioPlayer(
+      audioUrl,
+      {
+        updateInterval:
+          250,
+      }
+    );
 
 
   // ==========================================================
-  // STATUS DO PLAYER
+  // STATUS
   // ==========================================================
 
   const status =
@@ -89,7 +104,7 @@ export default function AudioPlayer({
 
 
   // ==========================================================
-  // CONFIGURAÇÃO DE ÁUDIO
+  // CONFIGURAÇÃO DO ÁUDIO
   // ==========================================================
 
   useEffect(() => {
@@ -129,7 +144,7 @@ export default function AudioPlayer({
 
 
   // ==========================================================
-  // STATUS
+  // DADOS DO PLAYER
   // ==========================================================
 
   const isLoaded =
@@ -186,14 +201,18 @@ export default function AudioPlayer({
 
     try {
 
-      if (!isLoaded) {
+      if (
+        !isLoaded
+      ) {
 
         return;
 
       }
 
 
-      if (isPlaying) {
+      if (
+        isPlaying
+      ) {
 
         player.pause();
 
@@ -203,8 +222,8 @@ export default function AudioPlayer({
 
 
       /*
-        Se terminou,
-        volta ao início.
+        Se o áudio já terminou,
+        volta para o começo.
       */
 
       if (
@@ -244,7 +263,9 @@ export default function AudioPlayer({
 
     try {
 
-      if (!isLoaded) {
+      if (
+        !isLoaded
+      ) {
 
         return;
 
@@ -283,14 +304,18 @@ export default function AudioPlayer({
 
     try {
 
-      if (!isLoaded) {
+      if (
+        !isLoaded
+      ) {
 
         return;
 
       }
 
 
-      if (duration <= 0) {
+      if (
+        duration <= 0
+      ) {
 
         return;
 
@@ -322,14 +347,16 @@ export default function AudioPlayer({
 
 
   // ==========================================================
-  // REPETIR
+  // REPRODUZIR NOVAMENTE
   // ==========================================================
 
   async function handleReplay() {
 
     try {
 
-      if (!isLoaded) {
+      if (
+        !isLoaded
+      ) {
 
         return;
 
@@ -427,89 +454,156 @@ export default function AudioPlayer({
 
 
   // ==========================================================
-  // BAIXAR ARQUIVO TEMPORÁRIO
+  // VERIFICAR ARQUIVO LOCAL
   // ==========================================================
 
-  async function downloadTemporaryAudio(
-    fileName: string
-  ) {
+  async function validateLocalAudio() {
 
     if (
-      !FileSystem.cacheDirectory
+      !audioUrl
     ) {
 
       throw new Error(
-        "Diretório temporário não disponível."
+        "Arquivo de áudio não encontrado."
       );
 
     }
 
 
-    const temporaryPath =
-      FileSystem.cacheDirectory
-      +
-      `${fileName}.mp3`;
-
-
     /*
-      Caso já exista,
-      removemos antes.
-    */
+      Com a nova arquitetura,
+      normalmente teremos:
 
-    const info =
-      await FileSystem.getInfoAsync(
-        temporaryPath
-      );
-
-
-    if (info.exists) {
-
-      await FileSystem.deleteAsync(
-        temporaryPath,
-        {
-          idempotent: true,
-        }
-      );
-
-    }
-
-
-    const downloaded =
-      await FileSystem.downloadAsync(
-        audioUrl,
-        temporaryPath
-      );
-
-
-    /*
-      Confirma resposta HTTP.
+      file:///data/...
     */
 
     if (
-      downloaded.status < 200
+      audioUrl.startsWith(
+        "file://"
+      )
+    ) {
+
+      const info =
+        await FileSystem
+          .getInfoAsync(
+            audioUrl
+          );
+
+
+      if (
+        !info.exists
+      ) {
+
+        throw new Error(
+          "O arquivo temporário de áudio não existe mais."
+        );
+
+      }
+
+
+      return audioUrl;
+
+    }
+
+
+    /*
+      content:// também pode representar
+      um arquivo local do Android.
+    */
+
+    if (
+      audioUrl.startsWith(
+        "content://"
+      )
+    ) {
+
+      return audioUrl;
+
+    }
+
+
+    /*
+      Fallback para compatibilidade.
+
+      Caso alguma versão anterior ainda
+      entregue uma URL HTTP, baixamos
+      temporariamente.
+
+      No funcionamento novo isso
+      normalmente não será usado.
+    */
+
+    if (
+      audioUrl.startsWith(
+        "http://"
+      )
       ||
-      downloaded.status >= 300
+      audioUrl.startsWith(
+        "https://"
+      )
     ) {
 
-      throw new Error(
-        `Erro HTTP ${downloaded.status}`
+      if (
+        !FileSystem.cacheDirectory
+      ) {
+
+        throw new Error(
+          "Diretório temporário não disponível."
+        );
+
+      }
+
+
+      const temporaryPath =
+        FileSystem.cacheDirectory
+        +
+        `audio-${Date.now()}.mp3`;
+
+
+      const downloaded =
+        await FileSystem
+          .downloadAsync(
+            audioUrl,
+            temporaryPath
+          );
+
+
+      if (
+        downloaded.status < 200
+        ||
+        downloaded.status >= 300
+      ) {
+
+        throw new Error(
+          `Erro HTTP ${downloaded.status}`
+        );
+
+      }
+
+
+      return (
+        downloaded.uri
       );
 
     }
 
 
-    return downloaded.uri;
+    throw new Error(
+      "Formato de arquivo de áudio inválido."
+    );
 
   }
 
 
   // ==========================================================
-  // SALVAR MP3
+  // BAIXAR / SALVAR MP3
   // ==========================================================
 
   async function handleDownload() {
 
-    if (downloading) {
+    if (
+      downloading
+    ) {
 
       return;
 
@@ -523,18 +617,16 @@ export default function AudioPlayer({
       );
 
 
+      // ======================================================
+      // ARQUIVO JÁ EXISTE NO CACHE
+      // ======================================================
+
+      const localAudioUri =
+        await validateLocalAudio();
+
+
       const fileName =
         generateFileName();
-
-
-      // ------------------------------------------------------
-      // BAIXA O MP3 PARA O CACHE
-      // ------------------------------------------------------
-
-      const temporaryUri =
-        await downloadTemporaryAudio(
-          fileName
-        );
 
 
       // ======================================================
@@ -552,8 +644,8 @@ export default function AudioPlayer({
 
 
         /*
-          Tentamos abrir diretamente
-          na pasta Download.
+          Abrimos inicialmente a pasta
+          Download do Android.
         */
 
         const downloadFolder =
@@ -563,9 +655,11 @@ export default function AudioPlayer({
 
 
         /*
-          O Android pede ao usuário
-          autorização para utilizar
-          aquela pasta.
+          O Android mostrará a tela
+          solicitando autorização.
+
+          O usuário pode confirmar
+          a pasta Download.
         */
 
         const permission =
@@ -589,14 +683,14 @@ export default function AudioPlayer({
         }
 
 
-        // ----------------------------------------------------
-        // LER MP3 COMO BASE64
-        // ----------------------------------------------------
+        // ====================================================
+        // LER MP3 LOCAL COMO BASE64
+        // ====================================================
 
         const base64 =
           await FileSystem
             .readAsStringAsync(
-              temporaryUri,
+              localAudioUri,
               {
                 encoding:
                   FileSystem
@@ -606,27 +700,26 @@ export default function AudioPlayer({
             );
 
 
-        // ----------------------------------------------------
-        // CRIAR MP3 NA PASTA DOWNLOAD
-        // ----------------------------------------------------
+        // ====================================================
+        // CRIAR ARQUIVO NA PASTA ESCOLHIDA
+        // ====================================================
 
         const destinationUri =
-          await SAF.createFileAsync(
-            permission.directoryUri,
+          await SAF
+            .createFileAsync(
 
-            /*
-              A documentação do SAF pede
-              nome sem extensão.
-            */
-            fileName,
+              permission.directoryUri,
 
-            "audio/mpeg"
-          );
+              fileName,
+
+              "audio/mpeg"
+
+            );
 
 
-        // ----------------------------------------------------
-        // ESCREVER CONTEÚDO
-        // ----------------------------------------------------
+        // ====================================================
+        // ESCREVER MP3
+        // ====================================================
 
         await FileSystem
           .writeAsStringAsync(
@@ -665,16 +758,27 @@ export default function AudioPlayer({
         sharingAvailable
       ) {
 
-        await Sharing.shareAsync(
-          temporaryUri,
-          {
-            mimeType:
-              "audio/mpeg",
+        /*
+          No iOS o usuário escolhe
+          "Salvar em Arquivos".
+        */
 
-            UTI:
-              "public.mp3",
-          }
-        );
+        await Sharing
+          .shareAsync(
+            localAudioUri,
+            {
+
+              mimeType:
+                "audio/mpeg",
+
+              dialogTitle:
+                "Salvar áudio",
+
+              UTI:
+                "public.mp3",
+
+            }
+          );
 
 
         return;
@@ -721,7 +825,9 @@ export default function AudioPlayer({
 
   async function handleShare() {
 
-    if (sharing) {
+    if (
+      sharing
+    ) {
 
       return;
 
@@ -740,7 +846,9 @@ export default function AudioPlayer({
           .isAvailableAsync();
 
 
-      if (!available) {
+      if (
+        !available
+      ) {
 
         Alert.alert(
           "Compartilhamento indisponível",
@@ -752,29 +860,33 @@ export default function AudioPlayer({
       }
 
 
-      const fileName =
-        generateFileName();
+      /*
+        Não precisamos mais baixar
+        o áudio novamente.
+
+        Ele já está no cache.
+      */
+
+      const localAudioUri =
+        await validateLocalAudio();
 
 
-      const temporaryUri =
-        await downloadTemporaryAudio(
-          fileName
+      await Sharing
+        .shareAsync(
+          localAudioUri,
+          {
+
+            mimeType:
+              "audio/mpeg",
+
+            dialogTitle:
+              "Compartilhar áudio",
+
+            UTI:
+              "public.mp3",
+
+          }
         );
-
-
-      await Sharing.shareAsync(
-        temporaryUri,
-        {
-          mimeType:
-            "audio/mpeg",
-
-          dialogTitle:
-            "Compartilhar áudio",
-
-          UTI:
-            "public.mp3",
-        }
-      );
 
 
     } catch (error) {
@@ -864,11 +976,14 @@ export default function AudioPlayer({
 
                   <View
                     style={[
+
                       styles.progressFill,
+
                       {
                         width:
                           `${progress * 100}%`,
                       },
+
                     ]}
                   />
 
@@ -1076,16 +1191,18 @@ export default function AudioPlayer({
 
 
               {/* ========================================= */}
-              {/* SALVAR MP3                               */}
+              {/* BAIXAR MP3                               */}
               {/* ========================================= */}
 
               <TouchableOpacity
                 style={[
+
                   styles.downloadButton,
 
                   downloading
                   &&
                   styles.disabledButton,
+
                 ]}
                 onPress={
                   handleDownload
@@ -1147,11 +1264,13 @@ export default function AudioPlayer({
 
               <TouchableOpacity
                 style={[
+
                   styles.shareButton,
 
                   sharing
                   &&
                   styles.disabledButton,
+
                 ]}
                 onPress={
                   handleShare
@@ -1168,9 +1287,26 @@ export default function AudioPlayer({
                   sharing
                     ? (
 
-                      <ActivityIndicator
-                        size="small"
-                      />
+                      <View
+                        style={
+                          styles.loadingButton
+                        }
+                      >
+
+                        <ActivityIndicator
+                          size="small"
+                        />
+
+
+                        <Text
+                          style={
+                            styles.shareButtonText
+                          }
+                        >
+                          Abrindo...
+                        </Text>
+
+                      </View>
 
                     )
                     : (
@@ -1299,17 +1435,20 @@ const styles =
 
     container: {
 
-      padding: 16,
+      padding:
+        16,
 
       backgroundColor:
         "#ffffff",
 
-      borderWidth: 1,
+      borderWidth:
+        1,
 
       borderColor:
         "#e2e8f0",
 
-      borderRadius: 16,
+      borderRadius:
+        16,
 
     },
 
@@ -1320,7 +1459,8 @@ const styles =
 
     loadingContainer: {
 
-      minHeight: 90,
+      minHeight:
+        90,
 
       flexDirection:
         "row",
@@ -1336,9 +1476,11 @@ const styles =
 
     loadingText: {
 
-      marginLeft: 10,
+      marginLeft:
+        10,
 
-      fontSize: 14,
+      fontSize:
+        14,
 
       color:
         "#64748b",
@@ -1352,16 +1494,19 @@ const styles =
 
     progressSection: {
 
-      marginBottom: 16,
+      marginBottom:
+        16,
 
     },
 
 
     progressBackground: {
 
-      width: "100%",
+      width:
+        "100%",
 
-      height: 7,
+      height:
+        7,
 
       overflow:
         "hidden",
@@ -1369,19 +1514,22 @@ const styles =
       backgroundColor:
         "#e2e8f0",
 
-      borderRadius: 999,
+      borderRadius:
+        999,
 
     },
 
 
     progressFill: {
 
-      height: "100%",
+      height:
+        "100%",
 
       backgroundColor:
         "#2563eb",
 
-      borderRadius: 999,
+      borderRadius:
+        999,
 
     },
 
@@ -1398,14 +1546,16 @@ const styles =
       justifyContent:
         "space-between",
 
-      marginTop: 7,
+      marginTop:
+        7,
 
     },
 
 
     timeText: {
 
-      fontSize: 12,
+      fontSize:
+        12,
 
       fontWeight:
         "600",
@@ -1435,7 +1585,8 @@ const styles =
       justifyContent:
         "center",
 
-      gap: 22,
+      gap:
+        22,
 
     },
 
@@ -1446,9 +1597,11 @@ const styles =
 
     playButton: {
 
-      width: 64,
+      width:
+        64,
 
-      height: 64,
+      height:
+        64,
 
       alignItems:
         "center",
@@ -1459,14 +1612,16 @@ const styles =
       backgroundColor:
         "#0f172a",
 
-      borderRadius: 32,
+      borderRadius:
+        32,
 
     },
 
 
     playIcon: {
 
-      fontSize: 24,
+      fontSize:
+        24,
 
       fontWeight:
         "800",
@@ -1483,9 +1638,11 @@ const styles =
 
     secondaryButton: {
 
-      width: 54,
+      width:
+        54,
 
-      height: 54,
+      height:
+        54,
 
       alignItems:
         "center",
@@ -1496,14 +1653,16 @@ const styles =
       backgroundColor:
         "#f1f5f9",
 
-      borderRadius: 27,
+      borderRadius:
+        27,
 
     },
 
 
     secondaryIcon: {
 
-      fontSize: 21,
+      fontSize:
+        21,
 
       fontWeight:
         "700",
@@ -1511,16 +1670,19 @@ const styles =
       color:
         "#334155",
 
-      lineHeight: 21,
+      lineHeight:
+        21,
 
     },
 
 
     secondaryText: {
 
-      marginTop: -2,
+      marginTop:
+        -2,
 
-      fontSize: 10,
+      fontSize:
+        10,
 
       fontWeight:
         "700",
@@ -1537,7 +1699,8 @@ const styles =
 
     replayButton: {
 
-      minHeight: 48,
+      minHeight:
+        48,
 
       flexDirection:
         "row",
@@ -1548,12 +1711,14 @@ const styles =
       justifyContent:
         "center",
 
-      marginTop: 16,
+      marginTop:
+        16,
 
       paddingHorizontal:
         12,
 
-      borderTopWidth: 1,
+      borderTopWidth:
+        1,
 
       borderTopColor:
         "#e2e8f0",
@@ -1563,9 +1728,11 @@ const styles =
 
     replayIcon: {
 
-      marginRight: 7,
+      marginRight:
+        7,
 
-      fontSize: 18,
+      fontSize:
+        18,
 
       color:
         "#475569",
@@ -1575,7 +1742,8 @@ const styles =
 
     replayText: {
 
-      fontSize: 13,
+      fontSize:
+        13,
 
       fontWeight:
         "700",
@@ -1592,7 +1760,8 @@ const styles =
 
     downloadButton: {
 
-      minHeight: 54,
+      minHeight:
+        54,
 
       alignItems:
         "center",
@@ -1600,7 +1769,8 @@ const styles =
       justifyContent:
         "center",
 
-      marginTop: 10,
+      marginTop:
+        10,
 
       paddingHorizontal:
         18,
@@ -1608,14 +1778,16 @@ const styles =
       backgroundColor:
         "#2563eb",
 
-      borderRadius: 12,
+      borderRadius:
+        12,
 
     },
 
 
     downloadButtonText: {
 
-      fontSize: 15,
+      fontSize:
+        15,
 
       fontWeight:
         "800",
@@ -1632,7 +1804,8 @@ const styles =
 
     shareButton: {
 
-      minHeight: 50,
+      minHeight:
+        50,
 
       alignItems:
         "center",
@@ -1640,7 +1813,8 @@ const styles =
       justifyContent:
         "center",
 
-      marginTop: 10,
+      marginTop:
+        10,
 
       paddingHorizontal:
         18,
@@ -1648,19 +1822,22 @@ const styles =
       backgroundColor:
         "#f8fafc",
 
-      borderWidth: 1,
+      borderWidth:
+        1,
 
       borderColor:
         "#cbd5e1",
 
-      borderRadius: 12,
+      borderRadius:
+        12,
 
     },
 
 
     shareButtonText: {
 
-      fontSize: 14,
+      fontSize:
+        14,
 
       fontWeight:
         "700",
@@ -1672,7 +1849,7 @@ const styles =
 
 
     // ========================================================
-    // BOTÃO CARREGANDO
+    // LOADING DO BOTÃO
     // ========================================================
 
     loadingButton: {
@@ -1683,14 +1860,19 @@ const styles =
       alignItems:
         "center",
 
-      gap: 10,
+      justifyContent:
+        "center",
+
+      gap:
+        10,
 
     },
 
 
     disabledButton: {
 
-      opacity: 0.55,
+      opacity:
+        0.55,
 
     },
 

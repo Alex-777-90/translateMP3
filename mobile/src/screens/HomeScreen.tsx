@@ -234,13 +234,6 @@ export default function HomeScreen() {
 
   useEffect(() => {
 
-    /*
-      Só utilizamos a detecção automática
-      quando o usuário escolheu:
-
-      Detectar automaticamente
-    */
-
     if (
       sourceLanguage !== "auto"
     ) {
@@ -265,11 +258,6 @@ export default function HomeScreen() {
     const cleanedText =
       text.trim();
 
-
-    /*
-      Não tenta detectar textos
-      extremamente pequenos.
-    */
 
     if (
       cleanedText.length
@@ -297,14 +285,6 @@ export default function HomeScreen() {
     let cancelled =
       false;
 
-
-    /*
-      Esperamos 700ms após o usuário
-      parar de digitar.
-
-      Isso evita enviar uma requisição
-      para cada letra digitada.
-    */
 
     const timer =
       setTimeout(
@@ -416,7 +396,7 @@ export default function HomeScreen() {
 
 
   // ==========================================================
-  // CONTADOR DE CARACTERES
+  // CONTADOR
   // ==========================================================
 
   const characterCount =
@@ -477,14 +457,6 @@ export default function HomeScreen() {
       value
     );
 
-
-    /*
-      Ao alterar o texto:
-
-      - tradução anterior deixa de valer
-      - áudio anterior deixa de valer
-      - idioma será detectado novamente
-    */
 
     setTranslatedText(
       ""
@@ -643,30 +615,14 @@ export default function HomeScreen() {
         });
 
 
-      // ======================================================
-      // TRADUÇÃO
-      // ======================================================
-
       setTranslatedText(
         result.translated
       );
 
 
-      // ======================================================
-      // IDIOMA DETECTADO
-      // ======================================================
-
       if (
         sourceLanguage === "auto"
       ) {
-
-        /*
-          Também aproveitamos a detecção
-          retornada pela tradução.
-
-          Isso serve como confirmação da
-          detecção feita enquanto digitava.
-        */
 
         if (
           result.detected_source
@@ -771,8 +727,22 @@ export default function HomeScreen() {
         });
 
 
+      // ======================================================
+      // NOVO FORMATO
+      // ======================================================
+      //
+      // Antes:
+      // result.audio_url
+      //
+      // Agora:
+      // result.audio_uri
+      //
+      // O MP3 já está salvo no cache
+      // local do celular.
+      // ======================================================
+
       setAudioUrl(
-        result.audio_url
+        result.audio_uri
       );
 
 
@@ -1072,14 +1042,12 @@ export default function HomeScreen() {
 
 
           {/* ================================================= */}
-          {/* DETECTANDO                                        */}
+          {/* DETECTANDO                                       */}
           {/* ================================================= */}
 
           {
             (
-              sourceLanguage
-              ===
-              "auto"
+              sourceLanguage === "auto"
               &&
               detectingLanguage
             )
@@ -1111,7 +1079,7 @@ export default function HomeScreen() {
 
 
           {/* ================================================= */}
-          {/* IDIOMA DETECTADO                                  */}
+          {/* IDIOMA DETECTADO                                 */}
           {/* ================================================= */}
 
           {
@@ -1176,9 +1144,7 @@ export default function HomeScreen() {
 
 
                     {
-                      detectionConfidence
-                      !==
-                      null
+                      detectionConfidence !== null
                       &&
                       (
                         ` • ${
@@ -1363,7 +1329,7 @@ export default function HomeScreen() {
 
 
         {/* ================================================= */}
-        {/* TRADUÇÃO                                         */}
+        {/* RESULTADO                                        */}
         {/* ================================================= */}
 
         {
@@ -1690,9 +1656,11 @@ const styles =
 
     scrollContent: {
 
-      paddingHorizontal: 20,
+      paddingHorizontal:
+        20,
 
-      paddingTop: 24,
+      paddingTop:
+        24,
 
     },
 
@@ -1703,14 +1671,16 @@ const styles =
 
     header: {
 
-      marginBottom: 28,
+      marginBottom:
+        28,
 
     },
 
 
     title: {
 
-      fontSize: 30,
+      fontSize:
+        30,
 
       fontWeight:
         "800",
@@ -1723,11 +1693,14 @@ const styles =
 
     subtitle: {
 
-      marginTop: 8,
+      marginTop:
+        8,
 
-      fontSize: 15,
+      fontSize:
+        15,
 
-      lineHeight: 22,
+      lineHeight:
+        22,
 
       color:
         "#64748b",
@@ -1741,7 +1714,8 @@ const styles =
 
     section: {
 
-      marginBottom: 18,
+      marginBottom:
+        18,
 
     },
 
@@ -1757,16 +1731,19 @@ const styles =
       justifyContent:
         "space-between",
 
-      marginBottom: 8,
+      marginBottom:
+        8,
 
     },
 
 
     label: {
 
-      marginBottom: 8,
+      marginBottom:
+        8,
 
-      fontSize: 15,
+      fontSize:
+        15,
 
       fontWeight:
         "700",
@@ -1779,9 +1756,11 @@ const styles =
 
     characterCount: {
 
-      marginBottom: 8,
+      marginBottom:
+        8,
 
-      fontSize: 12,
+      fontSize:
+        12,
 
       color:
         "#94a3b8",
@@ -1795,9 +1774,11 @@ const styles =
 
     textInput: {
 
-      minHeight: 160,
+      minHeight:
+        160,
 
-      maxHeight: 280,
+      maxHeight:
+        280,
 
       paddingHorizontal:
         16,
@@ -1835,7 +1816,8 @@ const styles =
 
     loadingLanguages: {
 
-      minHeight: 54,
+      minHeight:
+        54,
 
       flexDirection:
         "row",
