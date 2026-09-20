@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Áudios gerados
+backend/audio/*.mp3
+
+# Variáveis de ambiente
+.env
+.env.*
+
+# Node / React Native / Expo
+node_modules/
+.expo/
+dist/
+build/
+
+# Android
+android/.gradle/
+android/app/build/
+
+# iOS
+ios/Pods/
+
+# VS Code
+.vscode/
+
+# Sistema
+.DS_Store
+Thumbs.db
